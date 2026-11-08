@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#07090d" />
+<link rel="icon" href="data:," />
+<title>Última Ciudad — Supervivencia 3D</title>
+<style>
+  :root{
+    --amber:#ffb347; --red:#ff3b30; --cyan:#57e6ff; --ink:#07090d;
+    --hud:#e9edf2; --dim:#8d97a5;
+    --safe-t: env(safe-area-inset-top,0px);
+    --safe-b: env(safe-area-inset-bottom,0px);
+    --safe-l: env(safe-area-inset-left,0px);
+    --safe-r: env(safe-area-inset-right,0px);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{width:100%;height:100%;overflow:hidden;background:#05070a;color:var(--hud);
+    font-family:"Barlow Condensed","Arial Narrow",system-ui,-apple-system,"Segoe UI",sans-serif;
+    overscroll-behavior:none;touch-action:none;user-select:none}
+  canvas{display:block;position:fixed;inset:0;width:100%;height:100%;outline:none}
+  .hidden{display:none !important}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;letter-spacing:.08em}
+
+  /* ---------- global overlays ---------- */
+  #fx{position:fixed;inset:0;pointer-events:none;z-index:5;
+    background:
+      radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(0,0,0,.55) 100%),
+      linear-gradient(180deg, rgba(0,0,0,.35), transparent 18%, transparent 82%, rgba(0,0,0,.45));}
+  #grain{position:fixed;inset:-50%;pointer-events:none;z-index:6;opacity:.055;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    animation:grain 1.2s steps(3) infinite}
+  @keyframes grain{0%{transform:translate(0,0)}33%{transform:translate(-2%,1%)}66%{transform:translate(1%,-2%)}100%{transform:translate(0,0)}}
+  #hitflash{position:fixed;inset:0;pointer-events:none;z-index:7;opacity:0;
+    background:radial-gradient(ellipse at center, transparent 30%, rgba(180,0,0,.75) 100%);
+    transition:opacity .35s ease}
+  #hitflash.on{opacity:1;transition:opacity .05s}
+  #fade{position:fixed;inset:0;background:#05070a;z-index:40;pointer-events:none;opacity:0;transition:opacity .55s ease}
+  #fade.on{opacity:1}
+  #fade-title{position:fixed;inset:0;z-index:41;pointer-events:none;display:flex;align-items:center;justify-content:center;
+    opacity:0;transition:opacity .5s ease;background:rgba(5,7,10,.9)}
+  #fade-title.on{opacity:1}
+  #fade-title span{font-size:clamp(18px,3.4vw,30px);letter-spacing:.6em;text-transform:uppercase;color:#cfd6df;padding-left:.6em}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;z-index:10;pointer-events:none;opacity:0;transition:opacity .45s}
+  #hud.on{opacity:1}
+  .topbar{position:absolute;top:calc(var(--safe-t) + 14px);left:calc(var(--safe-l) + 20px);right:calc(var(--safe-r) + 20px);
+    display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+  .vitals{display:flex;flex-direction:column;gap:7px;width:min(280px,34vw)}
+  .bar{position:relative;height:7px;background:rgba(255,255,255,.09);overflow:hidden;
+    transform:skewX(-18deg);border:1px solid rgba(255,255,255,.09)}
+  .bar i{position:absolute;inset:0;transform-origin:left;transition:transform .18s ease;display:block}
+  .bar.hp i{background:linear-gradient(90deg,#ff2d2d,#ff7a45)}
+  .bar.stam{height:5px}
+  .bar.stam i{background:linear-gradient(90deg,#4bc8ff,#8affda)}
+  .bar.heal i{background:linear-gradient(90deg,#41ff9e,#d3ff6b)}
+  .vlabel{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.28em;color:var(--dim);text-transform:uppercase}
+  .vlabel b{color:#dfe6ee;font-weight:600}
+  .objective{text-align:center;flex:1;min-width:0;padding-top:2px}
+  #obj-main{display:block;font-size:clamp(13px,1.5vw,17px);letter-spacing:.2em;text-transform:uppercase;color:#f2f5f8;text-shadow:0 2px 12px #000}
+  #obj-sub{display:block;font-size:11px;letter-spacing:.18em;color:var(--amber);text-transform:uppercase;margin-top:3px}
+  .act-label{font-size:11px;letter-spacing:.3em;color:var(--dim);text-transform:uppercase;text-align:right;width:min(280px,34vw);padding-top:4px}
+  .act-label b{display:block;color:var(--amber);font-size:12px;letter-spacing:.24em}
+
+  #compass{position:absolute;left:50%;top:calc(var(--safe-t) + 66px);transform:translateX(-50%);
+    display:flex;align-items:center;gap:9px;opacity:0;transition:opacity .3s;pointer-events:none}
+  #compass.on{opacity:.92}
+  #compass-ring{width:34px;height:34px;border:1px solid rgba(255,255,255,.22);border-radius:50%;
+    display:grid;place-items:center;background:rgba(6,9,14,.4);backdrop-filter:blur(2px)}
+  #compass-arrow{width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;
+    border-bottom:13px solid var(--amber);filter:drop-shadow(0 0 6px rgba(255,179,71,.8));transform-origin:50% 60%}
+  #compass-dist{font-size:11px;letter-spacing:.16em;color:#cfd6df;min-width:44px}
+
+  #prompt{position:absolute;left:50%;bottom:calc(var(--safe-b) + 132px);transform:translateX(-50%);
+    font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:#fff;background:rgba(8,11,16,.65);
+    border:1px solid rgba(255,255,255,.16);padding:8px 14px;opacity:0;transition:opacity .2s;white-space:nowrap}
+  #prompt.on{opacity:1}
+  #toast{position:absolute;left:50%;top:23%;transform:translate(-50%,-8px);opacity:0;transition:opacity .3s,transform .3s;
+    font-size:clamp(15px,2vw,21px);letter-spacing:.24em;text-transform:uppercase;text-align:center;
+    color:#fff;text-shadow:0 2px 20px #000;max-width:80vw}
+  #toast.on{opacity:1;transform:translate(-50%,0)}
+  #toast small{display:block;font-size:11px;letter-spacing:.2em;color:var(--amber);margin-top:5px}
+
+  #bossbar{position:absolute;left:50%;bottom:calc(var(--safe-b) + 34px);transform:translateX(-50%);
+    width:min(560px,72vw);opacity:0;transition:opacity .4s;text-align:center}
+  #bossbar.on{opacity:1}
+  #bossbar .boss-name{font-size:12px;letter-spacing:.42em;text-transform:uppercase;color:#ffd2c9;margin-bottom:7px;text-shadow:0 0 18px rgba(255,40,40,.7)}
+  #bossbar .bar{height:9px;transform:none;border-color:rgba(255,90,70,.4);background:rgba(255,40,40,.1)}
+  #bossbar .bar i{background:linear-gradient(90deg,#7d0f14,#ff3b30 55%,#ff8a5c)}
+  #bossbar .pips{display:flex;justify-content:center;gap:6px;margin-top:6px}
+  #bossbar .pips b{width:16px;height:2px;background:rgba(255,255,255,.2)}
+  #bossbar .pips b.on{background:var(--red)}
+
+  /* ---------- touch controls ---------- */
+  #touch{position:absolute;inset:0;display:none}
+  body.touch #touch{display:block}
+  #stick{position:absolute;left:calc(var(--safe-l) + 26px);bottom:calc(var(--safe-b) + 26px);
+    width:132px;height:132px;border-radius:50%;border:1px solid rgba(255,255,255,.18);
+    background:radial-gradient(circle,rgba(255,255,255,.055),rgba(255,255,255,.015));pointer-events:auto;touch-action:none}
+  #knob{position:absolute;left:50%;top:50%;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;
+    background:rgba(233,237,242,.16);border:1px solid rgba(255,255,255,.32);box-shadow:0 0 22px rgba(0,0,0,.5)}
+  #buttons{position:absolute;right:calc(var(--safe-r) + 22px);bottom:calc(var(--safe-b) + 22px);
+    display:flex;align-items:flex-end;gap:10px;pointer-events:auto}
+  #buttons button{border-radius:50%;border:1px solid rgba(255,255,255,.24);background:rgba(10,14,20,.55);
+    backdrop-filter:blur(4px);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#e9edf2;
+    display:grid;place-items:center;touch-action:none}
+  #btn-action{width:88px;height:88px;background:rgba(255,179,71,.16);border-color:rgba(255,179,71,.5)}
+  #btn-dodge{width:66px;height:66px}
+  #btn-sprint{width:66px;height:66px}
+  #buttons button:active{background:rgba(255,179,71,.3)}
+  #buttons button.off{opacity:.35}
+
+  /* ---------- screens ---------- */
+  .screen{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;
+    padding:calc(var(--safe-t) + 26px) 24px calc(var(--safe-b) + 26px);overflow:auto;
+    background:radial-gradient(ellipse at 50% 40%, rgba(12,16,24,.62), rgba(4,6,9,.94) 78%)}
+  .screen .inner{width:min(880px,100%);text-align:center;animation:rise .6s cubic-bezier(.2,.8,.2,1)}
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  .eyebrow{font-size:11px;letter-spacing:.5em;text-transform:uppercase;color:var(--amber);margin-bottom:18px}
+  h1.title{font-size:clamp(46px,10vw,116px);line-height:.86;letter-spacing:.02em;font-weight:700;
+    text-transform:uppercase;text-shadow:0 0 60px rgba(255,80,30,.18);margin-bottom:8px}
+  h1.title em{font-style:normal;color:var(--amber);display:block;font-size:.46em;letter-spacing:.34em;margin-top:14px}
+  .tagline{font-size:clamp(13px,1.7vw,17px);letter-spacing:.16em;color:#b9c2ce;text-transform:uppercase;margin:22px 0 34px;line-height:1.7}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:15px 40px;
+    border:1px solid rgba(255,179,71,.55);background:rgba(255,179,71,.1);color:#fff;
+    font-size:14px;letter-spacing:.3em;text-transform:uppercase;transition:.2s;min-width:220px}
+  .btn:hover,.btn:focus-visible{background:rgba(255,179,71,.24);border-color:var(--amber);box-shadow:0 0 40px rgba(255,140,40,.22);outline:none}
+  .btn.ghost{border-color:rgba(255,255,255,.22);background:transparent;color:#c6ced8}
+  .btn.ghost:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.4)}
+  .btn.small{padding:11px 24px;font-size:11px;min-width:0;letter-spacing:.22em}
+  .menu-actions{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+  .controls{margin-top:38px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px 22px;
+    text-align:left;border-top:1px solid rgba(255,255,255,.1);padding-top:22px;max-width:720px;margin-left:auto;margin-right:auto}
+  .controls div{font-size:11px;letter-spacing:.1em;color:#98a2af;display:flex;gap:9px;align-items:baseline}
+  .controls kbd{font:inherit;font-size:10px;letter-spacing:.08em;color:#e9edf2;border:1px solid rgba(255,255,255,.22);
+    padding:3px 7px;border-radius:2px;background:rgba(255,255,255,.05);white-space:nowrap}
+  .best{margin-top:26px;font-size:11px;letter-spacing:.24em;color:#6f7b8a;text-transform:uppercase}
+  .best b{color:var(--amber)}
+
+  .act-num{font-size:clamp(60px,12vw,150px);line-height:.8;font-weight:700;color:transparent;
+    -webkit-text-stroke:1px rgba(255,179,71,.55);letter-spacing:.06em;margin-bottom:6px}
+  h2.story-title{font-size:clamp(26px,4.6vw,52px);letter-spacing:.16em;text-transform:uppercase;line-height:1.08;margin:6px 0 20px}
+  .story-copy{max-width:600px;margin:0 auto 30px;font-size:clamp(13px,1.6vw,16px);line-height:1.85;letter-spacing:.045em;color:#b6c0cc}
+  .story-copy strong{color:#fff;font-weight:600}
+  .story-copy .accent{color:var(--amber)}
+  .hint{margin-top:20px;font-size:10px;letter-spacing:.26em;color:#5f6a78;text-transform:uppercase}
+
+  .end-title{font-size:clamp(38px,8vw,92px);line-height:.9;letter-spacing:.06em;text-transform:uppercase;margin-bottom:14px}
+  .end-title.dead{color:#ff5a4a;text-shadow:0 0 60px rgba(255,40,20,.3)}
+  .end-title.win{color:#ffe1a6;text-shadow:0 0 70px rgba(255,170,60,.3)}
+  .end-sub{font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#a9b3c0;line-height:1.8;margin-bottom:30px}
+  .stats{display:flex;gap:34px;justify-content:center;flex-wrap:wrap;margin:0 0 34px;border-top:1px solid rgba(255,255,255,.1);
+    border-bottom:1px solid rgba(255,255,255,.1);padding:20px 0}
+  .stat{min-width:96px}
+  .stat b{display:block;font-size:clamp(22px,3vw,32px);letter-spacing:.04em;color:#fff}
+  .stat span{font-size:9.5px;letter-spacing:.24em;color:#798593;text-transform:uppercase}
+
+  #loading{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:#05070a;
+    transition:opacity .5s}
+  #loading.off{opacity:0;pointer-events:none}
+  .load-inner{text-align:center}
+  .load-inner .mark{font-size:clamp(30px,6vw,52px);letter-spacing:.3em;text-transform:uppercase;color:#e9edf2}
+  .load-inner .mark span{color:var(--amber)}
+  .load-line{width:200px;height:1px;background:rgba(255,255,255,.15);margin:22px auto 0;overflow:hidden}
+  .load-line i{display:block;height:100%;width:40%;background:var(--amber);animation:load 1.1s ease-in-out infinite}
+  @keyframes load{0%{transform:translateX(-110%)}100%{transform:translateX(320%)}}
+  .load-inner p{font-size:10px;letter-spacing:.4em;color:#6f7b8a;text-transform:uppercase;margin-top:14px}
+
+  #mute{position:fixed;right:calc(var(--safe-r) + 18px);bottom:calc(var(--safe-b) + 18px);z-index:20;
+    width:38px;height:38px;border:1px solid rgba(255,255,255,.16);border-radius:50%;
+    background:rgba(8,11,16,.5);color:#cfd6df;font-size:14px;display:grid;place-items:center;pointer-events:auto}
+  body.touch #mute{bottom:auto;top:calc(var(--safe-t) + 14px);right:calc(var(--safe-r) + 14px)}
+  #mute:hover{border-color:rgba(255,255,255,.4)}
+
+  @media (max-width:640px){
+    .topbar{left:calc(var(--safe-l) + 14px);right:calc(var(--safe-r) + 14px);gap:8px}
+    .vitals{width:40vw}
+    .act-label{width:auto}
+    .act-label b{font-size:10px}
+    #obj-main{font-size:11.5px;letter-spacing:.12em}
+    #obj-sub{font-size:9.5px}
+    #compass{top:calc(var(--safe-t) + 76px)}
+    #prompt{bottom:calc(var(--safe-b) + 178px)}
+    .controls{grid-template-columns:1fr 1fr;gap:8px 14px}
+    .stats{gap:20px}
+    .btn{min-width:180px;padding:14px 26px}
+  }
+  @media (max-height:520px){
+    .tagline{margin:12px 0 18px}
+    .controls{margin-top:18px;padding-top:14px}
+    h1.title{font-size:clamp(36px,8vw,70px)}
+  }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="fx"></div>
+<div id="grain"></div>
+<div id="hitflash"></div>
+
+<div id="hud">
+  <div class="topbar">
+    <div class="vitals">
+      <div class="vlabel"><span>Salud</span><b id="hp-num">100</b></div>
+      <div class="bar hp"><i id="hp-fill"></i></div>
+      <div class="bar stam"><i id="stam-fill"></i></div>
+      <div class="vlabel" style="margin-top:1px"><span>Resistencia</span><b id="stam-num">100</b></div>
+    </div>
+    <div class="objective">
+      <span id="obj-main">—</span>
+      <span id="obj-sub"></span>
+    </div>
+    <div class="act-label"><span id="act-num">ACTO I</span><b id="act-name">LA HUÍDA</b></div>
+  </div>
+
+  <div id="compass">
+    <div id="compass-ring"><div id="compass-arrow"></div></div>
+    <span id="compass-dist">—</span>
+  </div>
+
+  <div id="prompt"></div>
+  <div id="toast"></div>
+
+  <div id="bossbar">
+    <div class="boss-name">El Segador</div>
+    <div class="bar"><i id="boss-fill"></i></div>
+    <div class="pips" id="boss-pips"></div>
+  </div>
+
+  <div id="touch">
+    <div id="stick"><div id="knob"></div></div>
+    <div id="buttons">
+      <button id="btn-sprint">Correr</button>
+      <button id="btn-action">Acción</button>
+      <button id="btn-dodge">Esquivar</button>
+    </div>
+  </div>
+</div>
+
+<button id="mute" title="Silenciar">♪</button>
+
+<!-- TITLE -->
+<div class="screen" id="title-screen">
+  <div class="inner">
+    <div class="eyebrow">Supervivencia · Persecución · Combate</div>
+    <h1 class="title">Última<em>Ciudad</em></h1>
+    <p class="tagline">Él ya eligió a su presa.<br>Roba el coche. Cruza la noche. Y termínalo tú.</p>
+    <div class="menu-actions">
+      <button class="btn" id="btn-play">Jugar</button>
+    </div>
+    <div class="controls">
+      <div><kbd>W A S D</kbd><span>Moverse</span></div>
+      <div><kbd>Ratón</kbd><span>Mirar / apuntar</span></div>
+      <div><kbd>SHIFT</kbd><span>Correr / acelerar</span></div>
+      <div><kbd>ESPACIO</kbd><span>Esquivar</span></div>
+      <div><kbd>CLIC / J</kbd><span>Atacar</span></div>
+      <div><kbd>E</kbd><span>Interactuar</span></div>
+      <div><kbd>C</kbd><span>Agacharse</span></div>
+      <div><kbd>ESC</kbd><span>Pausa</span></div>
+    </div>
+    <div class="best" id="best-line"></div>
+  </div>
+</div>
+
+<!-- STORY -->
+<div class="screen hidden" id="story-screen">
+  <div class="inner">
+    <div class="act-num" id="story-act">I</div>
+    <h2 class="story-title" id="story-title">La huída</h2>
+    <p class="story-copy" id="story-copy"></p>
+    <div class="menu-actions"><button class="btn" id="btn-continue">Continuar</button></div>
+    <div class="hint" id="story-hint">Pulsa ESPACIO para continuar</div>
+  </div>
+</div>
+
+<!-- DEATH -->
+<div class="screen hidden" id="death-screen">
+  <div class="inner">
+    <div class="eyebrow" id="death-eyebrow">Acto I</div>
+    <h2 class="end-title dead" id="death-title">Has caído</h2>
+    <p class="end-sub" id="death-sub">La noche se lo quedó.</p>
+    <div class="menu-actions">
+      <button class="btn" id="btn-retry">Reintentar</button>
+      <button class="btn ghost" id="btn-menu">Menú</button>
+    </div>
+  </div>
+</div>
+
+<!-- WIN -->
+<div class="screen hidden" id="win-screen">
+  <div class="inner">
+    <div class="eyebrow">Amanece en la última ciudad</div>
+    <h2 class="end-title win">Sobreviviste</h2>
+    <p class="end-sub" id="win-sub">El Segador ya no volverá a levantarse.</p>
+    <div class="stats" id="win-stats"></div>
+    <div class="menu-actions">
+      <button class="btn" id="btn-again">Jugar de nuevo</button>
+      <button class="btn ghost" id="btn-win-menu">Menú</button>
+    </div>
+  </div>
+</div>
+
+<!-- PAUSE -->
+<div class="screen hidden" id="pause-screen">
+  <div class="inner">
+    <div class="eyebrow">En pausa</div>
+    <h2 class="story-title">La noche espera</h2>
+    <div class="menu-actions">
+      <button class="btn" id="btn-resume">Continuar</button>
+      <button class="btn ghost" id="btn-restart">Reiniciar acto</button>
+      <button class="btn ghost" id="btn-pause-menu">Menú</button>
+    </div>
+  </div>
+</div>
+
+<div id="fade"></div>
+<div id="fade-title"><span id="fade-title-text">Acto II</span></div>
+
+<div id="loading">
+  <div class="load-inner">
+    <div class="mark">Última <span>Ciudad</span></div>
+    <div class="load-line"><i></i></div>
+    <p>Cargando la noche</p>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
